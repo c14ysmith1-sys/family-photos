@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Family Photos · Fullscreen Select Test</title>
+  <style>
+    * { box-sizing: border-box; }
+    /* Fullscreen Select test: a stationary target over the photo. */
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #080808; color: #fff; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button { font: inherit; }
+    #stage { position: fixed; inset: 0; overflow: hidden; }
+    .slide { position: absolute; inset: 0; overflow: hidden; }
+    .slide { opacity: 0; transition: opacity 1.2s ease-in-out; }
+    .slide.active { opacity: 1; }
+    .photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+    #message { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 7vw; text-align: center; z-index: 3; background: radial-gradient(ellipse at 50% 30%, #20211e, #080808 75%); }
+    #message[hidden] { display: none; }
+    .message-inner { max-width: 700px; }
+    .eyebrow { font-size: 12px; letter-spacing: .24em; color: #b4b8ad; font-weight: 600; }
+    h1 { font-size: clamp(28px, 4vw, 54px); font-weight: 400; letter-spacing: -.04em; margin: 20px 0 16px; }
+    #message-text { font-size: clamp(16px, 1.6vw, 23px); line-height: 1.65; color: #c1c3bd; white-space: pre-line; }
+    #hud { position: fixed; inset: 0; z-index: 4; opacity: 0; visibility: hidden; transition: opacity .4s, visibility .4s; pointer-events: none; background: linear-gradient(#0009, transparent 22%, transparent 72%, #000b); }
+    #hud.visible { opacity: 1; visibility: visible; }
+    .top { position: absolute; top: max(28px, env(safe-area-inset-top)); left: 3.5vw; right: 3.5vw; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    #count { color: #e5e6df; font-size: 14px; font-variant-numeric: tabular-nums; }
+    .bottom { position: absolute; left: 3.5vw; right: 3.5vw; bottom: max(24px, env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: end; gap: 20px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; pointer-events: auto; }
+    button { border: 1px solid #ffffff32; border-radius: 30px; background: #141512c9; color: #f4f5ef; padding: 11px 17px; cursor: pointer; font-size: 14px; }
+    button:hover, button:focus-visible { outline: 2px solid #e9efc9; outline-offset: 3px; background: #32362b; }
+    .hint { color: #d2d5ca; text-align: right; font-size: 12px; line-height: 1.8; }
+    #details { position: fixed; top: 80px; right: 3.5vw; background: #131510ed; border: 1px solid #ffffff29; padding: 22px 26px; border-radius: 16px; z-index: 5; max-width: min(440px, 90vw); }
+    #details[hidden] { display: none; }
+    #details h2 { font-size: 17px; font-weight: 500; margin: 0 0 15px; }
+    #details dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 12px 24px; font-size: 13px; line-height: 1.5; }
+    dt { color: #a4aa9b; } dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+    #details p { color: #a4aa9b; font-size: 12px; line-height: 1.6; margin: 18px 0 0; }
+    #fullscreen-prompt { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
+    #fullscreen-prompt[hidden] { display: none; }
+    #start-fullscreen {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: min(72vw, 620px); height: clamp(140px, 28vh, 250px);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+      border: 2px solid #f2f4df; border-radius: 24px; padding: 24px;
+      background: #182017ed; color: #fff; pointer-events: auto;
+      box-shadow: 0 12px 60px #0008; font-size: clamp(24px, 3vw, 42px);
+    }
+    #start-fullscreen:hover, #start-fullscreen:focus { outline: 3px solid #d8e8b7; outline-offset: 5px; background: #263423f2; }
+    .fullscreen-subtitle { font-size: clamp(13px, 1.5vw, 20px); color: #e0e7d7; font-weight: 400; }
+    #fullscreen-feedback {
+      position: absolute; top: calc(50% + clamp(70px, 14vh, 125px) + 20px); left: 50%;
+      transform: translateX(-50%); width: min(80vw, 700px); margin: 0;
+      padding: 10px 16px; border-radius: 12px; text-align: center; line-height: 1.5;
+      background: #111b; font-size: clamp(13px, 1.4vw, 19px); color: #fff;
+    }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    @media (max-width: 700px) { .hint { display: none; } .controls { gap: 6px; } button { font-size: 12px; padding: 10px 12px; } .top { top: 22px; } }
+    @media (prefers-reduced-motion: reduce) { .slide, #hud { transition: none; } }
+  </style>
+</head>
+<body>
+  <main id="stage" aria-label="Family photo slideshow">
+    <div class="slide"><img class="photo" alt=""></div>
+    <div class="slide"><img class="photo" alt=""></div>
+  </main>
+  <section id="message" role="status">
+    <div class="message-inner"><div class="eyebrow">FAMILY PHOTOS</div><h1 id="message-title">A moment for your memories.</h1><p id="message-text">Loading your photos…</p><button id="retry" hidden>Try again</button></div>
+  </section>
+  <div id="hud">
+    <div class="top"><div class="eyebrow">FAMILY PHOTOS</div><div id="count">Starting slideshow</div></div>
+    <div class="bottom">
+      <div class="controls">
+        <button id="previous" aria-label="Previous photo">← Previous</button><button id="play-pause">Pause</button><button id="next" aria-label="Next photo">Next →</button><button id="fullscreen">Full screen</button><button id="settings">Details</button><button id="reload">Refresh photos</button>
+      </div>
+      <div class="hint">LEFT / RIGHT &nbsp; Previous / Next<br>OK &nbsp; Pause / Play &nbsp; · &nbsp; UP &nbsp; Details</div>
+    </div>
+  </div>
+  <aside id="details" hidden aria-label="Slideshow details">
+    <h2>Slideshow details</h2>
+    <dl><dt>Keep awake</dt><dd id="wake-state">Checking…</dd><dt>Photo interval</dt><dd id="interval-state">20 seconds</dd><dt>Collection</dt><dd id="collection-state">Loading…</dd><dt>Playback</dt><dd id="playback-state">Playing</dd><dt>Photo list</dt><dd id="source-state">Loading…</dd></dl>
+    <p>The keep-awake request applies while this page is visible. Check the TV’s own sleep settings if it still turns off.</p>
+  </aside>
+  <div id="fullscreen-prompt" role="group" aria-label="Start full screen">
+    <button id="start-fullscreen" type="button" autofocus aria-describedby="fullscreen-feedback">
+      <span id="fullscreen-label">Start full screen</span>
+      <span class="fullscreen-subtitle">Say “Alexa, select” or press OK</span>
+    </button>
+    <p id="fullscreen-feedback" role="status" aria-live="polite">Waiting for Select</p>
+  </div>
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+  <script>
+  (function () {
+    "use strict";
+    // A standalone family photo slideshow: one photo fills the screen.
+    // Add photos to tv-photos/ in the family-photos repository; subfolders are supported.
+    // Optional: tv-photos.json can supply a static array of repository-relative photo paths.
+    var CONFIG = { owner: "c14ysmith1-sys", repo: "family-photos", branch: "main", folder: "tv-photos", seconds: 20, refreshMinutes: 15 };
+    var params = new URLSearchParams(location.search);
+    var suppliedSeconds = Number(params.get("seconds"));
+    if (suppliedSeconds >= 5 && suppliedSeconds <= 3600) CONFIG.seconds = suppliedSeconds;
+    var slides = Array.from(document.querySelectorAll(".slide"));
+    var activeSlide = -1, records = [], bag = [], current = null;
+    var history = [], historyIndex = -1, busy = false, paused = false, timer = null, retryTimer = null;
+    var hudTimer = null, failed = new Map(), transitioning = false;
+    var cacheKey = "family-photos-index-v1:" + CONFIG.owner + "/" + CONFIG.repo + "/" + CONFIG.folder;
+    var wakeLock = null, wakePending = false, refreshPending = false;
+    var imagePattern = /\.(jpe?g|png|webp|avif)$/i;
+    function el(id) { return document.getElementById(id); }
+    el("interval-state").textContent = CONFIG.seconds + " seconds";
+
+    function setMessage(title, text, retry) {
+      el("message-title").textContent = title; el("message-text").textContent = text;
+      el("retry").hidden = !retry; el("message").hidden = false;
+    }
+    function showHud() {
+      el("hud").classList.add("visible"); clearTimeout(hudTimer);
+      hudTimer = setTimeout(function () { if (el("details").hidden && el("message").hidden) el("hud").classList.remove("visible"); }, 6000);
+    }
+    function updateStatus() {
+      el("count").textContent = (paused ? "Paused · " : "") + records.length + (records.length === 1 ? " photo" : " photos");
+      el("collection-state").textContent = records.length + " photos";
+      el("play-pause").textContent = paused ? "Play" : "Pause";
+      el("play-pause").setAttribute("aria-label", paused ? "Play slideshow" : "Pause slideshow");
+      el("playback-state").textContent = paused ? "Paused" : "Playing";
+    }
+    function validRecord(item) {
+      var path = typeof item === "string" ? item : item && item.path;
+      if (!path || !path.startsWith(CONFIG.folder + "/") || path.split("/").some(function (p) { return p === ".." || p === "."; }) || !imagePattern.test(path)) return null;
+      return { path: path, sha: typeof item === "object" && item.sha ? String(item.sha) : "" };
+    }
+    function normalize(items) {
+      var seen = new Set();
+      return items.map(validRecord).filter(function (item) { if (!item || seen.has(item.path)) return false; seen.add(item.path); return true; }).sort(function (a, b) { return a.path.localeCompare(b.path); });
+    }
+    function imageUrl(item) {
+      var path = item.path.split("/").map(encodeURIComponent).join("/");
+      return new URL(path + (item.sha ? "?v=" + encodeURIComponent(item.sha.slice(0, 12)) : ""), location.href).href;
+    }
+    async function fetchJson(url, timeout) {
+      var controller = new AbortController();
+      var timeoutId = setTimeout(function () { controller.abort(); }, timeout || 18000);
+      try {
+        var response = await fetch(url, { cache: "no-store", signal: controller.signal, credentials: "omit" });
+        if (!response.ok) throw new Error("Photo list request returned " + response.status);
+        return await response.json();
+      } finally { clearTimeout(timeoutId); }
+    }
+    async function getRecords() {
+      try {
+        var manifest = await fetchJson(new URL("tv-photos.json", location.href).href, 5000);
+        if (Array.isArray(manifest)) return { records: normalize(manifest), source: "Photo list" };
+      } catch (ignore) { /* A static manifest is optional. */ }
+      try {
+        var api = "https://api.github.com/repos/" + encodeURIComponent(CONFIG.owner) + "/" + encodeURIComponent(CONFIG.repo) + "/git/trees/" + encodeURIComponent(CONFIG.branch) + "?recursive=1";
+        var data = await fetchJson(api);
+        if (!Array.isArray(data.tree) || data.truncated) throw new Error("The photo list could not be read completely.");
+        var found = normalize(data.tree.filter(function (entry) { return entry.type === "blob"; }));
+        try { localStorage.setItem(cacheKey, JSON.stringify(found)); } catch (ignore) {}
+        return { records: found, source: "Up to date" };
+      } catch (error) {
+        try {
+          var saved = JSON.parse(localStorage.getItem(cacheKey) || "null");
+          if (Array.isArray(saved) && saved.length) return { records: normalize(saved), source: "Saved list · offline" };
+        } catch (ignore) {}
+        throw error;
+      }
+    }
+    function shuffle(items) {
+      var result = items.slice();
+      for (var i = result.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var tmp = result[i]; result[i] = result[j]; result[j] = tmp; }
+      if (result.length > 1 && current && result[0].path === current.path) { var swap = result[0]; result[0] = result[1]; result[1] = swap; }
+      return result;
+    }
+    function nextRecord() {
+      if (!bag.length) bag = shuffle(records);
+      return bag.shift();
+    }
+    function loadImage(item) {
+      return new Promise(function (resolve, reject) {
+        var photo = new Image(), done = false;
+        var timeoutId = setTimeout(function () { finish(new Error("Photo timed out")); }, 20000);
+        function finish(error) { if (done) return; done = true; clearTimeout(timeoutId); photo.onload = photo.onerror = null; if (error) reject(error); else resolve(photo); }
+        photo.onload = function () { if (photo.naturalWidth <= photo.naturalHeight) finish(new Error("Only horizontal photos are shown")); else finish(); };
+        photo.onerror = function () { finish(new Error("Photo unavailable")); };
+        photo.src = imageUrl(item);
+      });
+    }
+    function scheduleNext() {
+      clearTimeout(timer);
+      if (!paused && current && document.visibilityState === "visible") timer = setTimeout(function () { showPhoto(1); }, CONFIG.seconds * 1000);
+    }
+    async function present(item, photo) {
+      var nextSlide = activeSlide === 0 ? 1 : 0;
+      var node = slides[nextSlide];
+      node.querySelector(".photo").src = photo.src;
+      node.querySelector(".photo").alt = "Family photograph";
+      el("message").hidden = true;
+      transitioning = true;
+      node.classList.add("active");
+      if (activeSlide >= 0) slides[activeSlide].classList.remove("active");
+      activeSlide = nextSlide; current = item;
+      updateStatus();
+      // Keep the two photo layers stable until the crossfade is finished.
+      await new Promise(function (resolve) { setTimeout(resolve, 1250); });
+      var hiddenSlide = slides[activeSlide === 0 ? 1 : 0];
+      hiddenSlide.querySelectorAll("img").forEach(function (img) { img.removeAttribute("src"); });
+      transitioning = false;
+    }
+    async function showPhoto(direction) {
+      if (busy || transitioning || !records.length) return;
+      busy = true; clearTimeout(timer); clearTimeout(retryTimer);
+      try {
+        if (direction < 0) {
+          if (historyIndex > 0) {
+            var previous = history[historyIndex - 1];
+            var previousImage = await loadImage(previous);
+            historyIndex--; await present(previous, previousImage);
+          }
+          return;
+        }
+        if (historyIndex < history.length - 1) {
+          var forward = history[historyIndex + 1];
+          try { var forwardImage = await loadImage(forward); historyIndex++; await present(forward, forwardImage); return; }
+          catch (ignore) { history.splice(historyIndex + 1, 1); }
+        }
+        var tried = new Set();
+        while (tried.size < records.length) {
+          var candidate = nextRecord();
+          if (!candidate || tried.has(candidate.path)) continue;
+          tried.add(candidate.path);
+          if (failed.has(candidate.path) && Date.now() - failed.get(candidate.path) < 60000) continue;
+          try {
+            var photo = await loadImage(candidate);
+            failed.delete(candidate.path);
+            history = history.slice(0, historyIndex + 1); history.push(candidate);
+            if (history.length > 100) history.shift();
+            historyIndex = history.length - 1;
+            await present(candidate, photo); return;
+          } catch (ignore) { failed.set(candidate.path, Date.now()); }
+        }
+        if (!current) setMessage("Your photos aren’t ready yet.", "Use horizontal JPG, PNG, WebP, or AVIF photos in the tv-photos folder.\nIf you just uploaded them, allow GitHub Pages to finish publishing.", true);
+        retryTimer = setTimeout(function () { failed.clear(); showPhoto(1); }, 60000);
+      } catch (error) {
+        if (!current) setMessage("Let’s try that again.", "A photo could not be opened. Try refreshing the collection.", true);
+      } finally { busy = false; scheduleNext(); }
+    }
+    async function refreshCollection(manual) {
+      if (refreshPending) return;
+      refreshPending = true;
+      try {
+        var result = await getRecords();
+        var signature = function (list) { return list.map(function (r) { return r.path + ":" + r.sha; }).join("|"); };
+        if (signature(result.records) !== signature(records)) { records = result.records; bag = []; failed.clear(); }
+        el("source-state").textContent = result.source; updateStatus();
+        if (!records.length) {
+          clearTimeout(timer);
+          setMessage("Add your first photos.", "Upload a folder named tv-photos beside index.html in your GitHub repository.\nStart with 5–10 horizontal JPG or PNG photos, then refresh this page.", true);
+        } else if (!current || manual) { await showPhoto(1); if (manual) showHud(); }
+      } catch (error) {
+        el("source-state").textContent = "Temporarily unavailable";
+        if (!current) setMessage("The photo list is unavailable.", "Check your internet connection, then try again.\nIf GitHub is temporarily limiting requests, wait a few minutes.", true);
+      } finally { refreshPending = false; }
+    }
+    async function requestWakeLock() {
+      if (document.visibilityState !== "visible" || wakePending || (wakeLock && !wakeLock.released)) return;
+      if (!("wakeLock" in navigator) || !navigator.wakeLock.request) { el("wake-state").textContent = "Unsupported in this browser"; return; }
+      wakePending = true;
+      try {
+        var acquired = await navigator.wakeLock.request("screen");
+        wakeLock = acquired;
+        el("wake-state").textContent = acquired.released ? "Released · will retry" : "Active";
+        acquired.addEventListener("release", function () { if (wakeLock === acquired) { wakeLock = null; el("wake-state").textContent = "Released · will retry"; } });
+      } catch (error) { wakeLock = null; el("wake-state").textContent = "Request failed · will retry"; }
+      finally { wakePending = false; }
+    }
+    function togglePause() { paused = !paused; updateStatus(); scheduleNext(); showHud(); el("announcement").textContent = paused ? "Slideshow paused" : "Slideshow playing"; }
+    function toggleDetails() { el("details").hidden = !el("details").hidden; showHud(); }
+    var fullscreenPending = false, fullscreenTimer = null;
+    function isFullscreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+    function focusFullscreenButton() {
+      try { el("start-fullscreen").focus({ preventScroll: true }); }
+      catch (ignore) { el("start-fullscreen").focus(); }
+    }
+    function syncFullscreen() {
+      var active = isFullscreen();
+      if (active) {
+        fullscreenPending = false; clearTimeout(fullscreenTimer);
+        el("fullscreen-prompt").hidden = true;
+        el("fullscreen").textContent = "Exit full screen";
+        el("details").hidden = true;
+        clearTimeout(hudTimer); el("hud").classList.remove("visible");
+        el("announcement").textContent = "Full screen started";
+      } else {
+        el("fullscreen-prompt").hidden = false;
+        el("fullscreen").textContent = "Full screen";
+        el("fullscreen-label").textContent = "Start full screen";
+        el("fullscreen-feedback").textContent = "Waiting for Select";
+        focusFullscreenButton();
+      }
+    }
+    function fullscreenFailed(message) {
+      if (isFullscreen()) { syncFullscreen(); return; }
+      fullscreenPending = false; clearTimeout(fullscreenTimer);
+      el("fullscreen-prompt").hidden = false;
+      el("fullscreen-label").textContent = "Try full screen again";
+      el("fullscreen-feedback").textContent = message || "Select received. The browser declined full screen. Try OK on the remote.";
+    }
+    function enterFullscreen() {
+      if (isFullscreen()) { syncFullscreen(); return; }
+      if (fullscreenPending) return;
+      el("fullscreen-feedback").textContent = "Select received. Requesting full screen…";
+      var root = document.documentElement;
+      var enter = root.requestFullscreen || root.webkitRequestFullscreen;
+      if (!enter) {
+        fullscreenFailed("Select received. Full screen is unavailable in this browser.");
+        return;
+      }
+      fullscreenPending = true;
+      el("fullscreen-label").textContent = "Opening full screen…";
+      // Request synchronously inside the real click/key handler, before any await.
+      try {
+        var result = root.requestFullscreen ? root.requestFullscreen({ navigationUI: "hide" }) : enter.call(root);
+        fullscreenTimer = setTimeout(function () {
+          if (isFullscreen()) syncFullscreen();
+          else fullscreenFailed("Select received. The browser did not enter full screen. Try OK on the remote.");
+        }, 2500);
+        if (result && result.then) result.then(syncFullscreen).catch(function (error) { el("fullscreen-prompt").setAttribute("data-fullscreen-error", String(error && (error.name + ": " + error.message))); fullscreenFailed(); });
+        else if (isFullscreen()) syncFullscreen();
+      } catch (error) { el("fullscreen-prompt").setAttribute("data-fullscreen-error", String(error && (error.name + ": " + error.message))); fullscreenFailed(); }
+      requestWakeLock();
+    }
+    function fullscreen() {
+      if (!isFullscreen()) { enterFullscreen(); return; }
+      var leave = document.exitFullscreen || document.webkitExitFullscreen;
+      try {
+        var result = leave && leave.call(document);
+        if (result && result.catch) result.catch(function () { syncFullscreen(); });
+      } catch (ignore) { syncFullscreen(); }
+    }
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    document.addEventListener("webkitfullscreenchange", syncFullscreen);
+    document.addEventListener("fullscreenerror", function () { fullscreenFailed(); });
+    document.addEventListener("webkitfullscreenerror", function () { fullscreenFailed(); });
+    el("start-fullscreen").onclick = enterFullscreen;
+    focusFullscreenButton();
+    el("previous").onclick = function () { showPhoto(-1); showHud(); };
+    el("next").onclick = function () { showPhoto(1); showHud(); };
+    el("play-pause").onclick = togglePause; el("fullscreen").onclick = fullscreen; el("settings").onclick = toggleDetails;
+    el("reload").onclick = el("retry").onclick = function () { failed.clear(); refreshCollection(true); showHud(); };
+    document.addEventListener("mousemove", showHud);
+    document.addEventListener("pointerdown", function () { requestWakeLock(); showHud(); });
+    document.addEventListener("keydown", function (event) {
+      requestWakeLock();
+      var key = event.key;
+      // Alexa/remote may deliver a pointer click or an Enter/Select key.
+      // Keep the first confirmation from also toggling Pause.
+      if (!el("fullscreen-prompt").hidden && (key === "Enter" || key === "Select" || key === "NumpadEnter" || key === " ")) {
+        event.preventDefault();
+        if (!event.repeat) enterFullscreen();
+        return;
+      }
+      if (key === "ArrowRight") { event.preventDefault(); showPhoto(1); }
+      else if (key === "ArrowLeft") { event.preventDefault(); showPhoto(-1); }
+      else if (key === "ArrowUp") { event.preventDefault(); toggleDetails(); }
+      else if (key === "ArrowDown" || key === "Escape") { el("details").hidden = true; if (key === "ArrowDown") event.preventDefault(); }
+      else if (key === " " || key === "MediaPlayPause" || (key === "Enter" && event.target.tagName !== "BUTTON")) { event.preventDefault(); togglePause(); }
+      else if (key === "f" || key === "F") fullscreen();
+      else if (key === "r" || key === "R") refreshCollection(true);
+    });
+    document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") { requestWakeLock(); scheduleNext(); } else clearTimeout(timer); });
+    window.addEventListener("pagehide", function () { if (wakeLock) wakeLock.release().catch(function () {}); });
+    setInterval(requestWakeLock, 60000);
+    setInterval(function () { if (document.visibilityState === "visible") refreshCollection(false); }, CONFIG.refreshMinutes * 60000);
+    requestWakeLock();
+    if (location.protocol === "file:") setMessage("Open your published photo page.", "Upload index.html to GitHub, then open its GitHub Pages address.\nOpening the downloaded file directly won’t load your online photo folder.", false);
+    else refreshCollection(false);
+  })();
+  </script>
+</body>
+</html>
+
